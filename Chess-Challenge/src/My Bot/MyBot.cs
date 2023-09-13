@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Numerics;
 using ChessChallenge.API;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 public class MyBot : IChessBot {
 
@@ -10,9 +13,13 @@ public class MyBot : IChessBot {
     private readonly double[] PieceValues = {
         0, 1, 3, 3, 5, 9, 0
     };
+    private Dictionary<ulong, (double, List<Move>)> cache;
+
+    public MyBot() {
+        cache = new Dictionary<ulong, (double, List<Move>)>();
+    }
 
     public Move Think(Board board, Timer timer) {
-        //return board.GetLegalMoves()[0];
         return ActualWorkingChessEngineLoL(board, timer);
     }
 
@@ -28,10 +35,8 @@ public class MyBot : IChessBot {
         return Move.NullMove;
     }
 
-
-
     private Move ActualWorkingChessEngineLoL(Board board, Timer timer) {
-        (double score, List<Move> moves) = MinMax(board, board.IsWhiteToMove, timer, 0, long.MaxValue);
+        (double score, List<Move> moves) = MinMax(board, timer, 0, long.MaxValue);
         Console.Write("Got Score " + score + " by playing move: ");
         moves.Reverse();
         moves.ForEach(move => Console.Write(move + " "));
@@ -39,24 +44,40 @@ public class MyBot : IChessBot {
         return moves[0];
     }
 
-    private (double, List<Move>) MinMax(Board board, bool isWhite, Timer timer, int depth, long maxTime) {
-        List<Move> bestLine = new List<Move>();
+    private (double, List<Move>) MinMax(Board board, Timer timer, int depth, long maxTime) {
+
+        if (depth >= MaxDepth || timer.MillisecondsElapsedThisTurn >= maxTime) { 
+            return (EvaluateBoard(board), new List<Move>()); 
+        }
+
+        bool isWhiteToMove = board.IsWhiteToMove;
         double bestScore = double.NaN;
-
-        if (depth >= MaxDepth || timer.MillisecondsElapsedThisTurn >= maxTime) { return (EvaluateBoard(board), new List<Move>()); }
-
+        Move bestMove = Move.NullMove;
         Move[] legalMoves = board.GetLegalMoves();
+        List<Move> bestLine = new List<Move>();
+
+        Array.Sort(legalMoves, (a, b) => {
+            return (-1) * a.GetHashCode().CompareTo(b.GetHashCode());
+        });
+
         foreach (Move move in legalMoves) {
             board.MakeMove(move);
-            (double score, List<Move> line) = MinMax(board, !isWhite, timer, depth + 1, maxTime);
+            
+            (double score, List< Move > line) = this.cache.GetValueOrDefault(board.ZobristKey, (double.NaN, new List<Move>()));
+            if (double.IsNaN(score)) {
+                (score, line) = MinMax(board, timer, depth + 1, maxTime);
+                cache[board.ZobristKey] = (score, line);
+            }
 
-            if (Double.IsNaN(bestScore) || (isWhite && bestScore < score) || (!isWhite && bestScore > score)) {
+            if (Double.IsNaN(bestScore) || (isWhiteToMove && bestScore < score) || (!isWhiteToMove && bestScore > score)) {
                 bestScore = score;
                 bestLine = line;
-                bestLine.Add(move);
+                bestMove = move;
             }
+
             board.UndoMove(move);
         }
+        bestLine.Add(bestMove);
 
         return (bestScore, bestLine);
     }
