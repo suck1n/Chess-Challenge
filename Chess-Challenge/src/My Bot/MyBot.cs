@@ -6,7 +6,7 @@ using ChessChallenge.API;
 public class MyBot : IChessBot {
 
     private const int MaxDepth = 5;
-    private readonly double[] _pieceValues = { 0, 1, 3, 3, 5, 9, 0 };
+    private readonly int[] _pieceValues = { 0, 1, 3, 3, 5, 9, 0 };
     private readonly Dictionary<ulong, (double, Move)> _cache = new();
 
 
@@ -51,7 +51,7 @@ public class MyBot : IChessBot {
 
         Move bestMove = Move.NullMove;
 
-        Array.Sort(legalMoves, MoveOrder);
+        Array.Sort(legalMoves, (a, b) => MoveOrder(a, b, board));
 
         foreach (Move move in legalMoves) {
             board.MakeMove(move);
@@ -83,7 +83,22 @@ public class MyBot : IChessBot {
         return (board.IsWhiteToMove ? 1 : -1) * eval;
     }
 
-    private int MoveOrder(Move a, Move b) {
-        return (-1) * a.GetHashCode().CompareTo(b.GetHashCode());
+    private int MoveOrder(Move a, Move b, Board board) {
+        int weight = 0;
+        
+        // + Taking moves
+        weight += _pieceValues[(int)a.CapturePieceType] - _pieceValues[(int)b.CapturePieceType];
+        
+        // + Promote pawn
+        weight += _pieceValues[(int)a.PromotionPieceType] - _pieceValues[(int)b.PromotionPieceType];
+
+        // - Gifting piece
+        weight -= (board.SquareIsAttackedByOpponent(a.TargetSquare) ? _pieceValues[(int)a.MovePieceType] : 0 )
+                  - (board.SquareIsAttackedByOpponent(b.TargetSquare) ? _pieceValues[(int)b.MovePieceType] : 0 );
+        
+        // TODO + Check move
+        // TODO + Develop piece
+        // TODO Positional awareness
+        return -weight; // Invert because of ascending order
     }
 }
