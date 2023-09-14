@@ -6,9 +6,7 @@ using ChessChallenge.API;
 public class MyBot : IChessBot {
 
     private const int MaxDepth = 5;
-    private readonly double[] _pieceValues = {
-        0, 1, 3, 3, 5, 9, 0
-    };
+    private readonly double[] _pieceValues = { 0, 1, 3, 3, 5, 9, 0 };
     private readonly Dictionary<ulong, (double, Move)> _cache = new();
 
 
@@ -29,14 +27,15 @@ public class MyBot : IChessBot {
     private Move ActualWorkingChessEngineLoL(Board board, Timer timer) {
         _cache.Clear();
 
-        (double score, Move move) = MinMax(board, timer, 0, long.MaxValue);
-
-        Console.WriteLine("Will get Score " + score + " by playing move: " + move);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        (double score, Move move) = MinMax(board, timer, 0, long.MaxValue, double.NegativeInfinity, double.PositiveInfinity);
+        watch.Stop();
+        Console.WriteLine("Time " + watch.ElapsedMilliseconds + "ms\tWill get Score " + score + " by playing move: " + move);
 
         return move;
     }
 
-    private (double, Move) MinMax(Board board, Timer timer, int depth, long maxTime) {
+    private (double, Move) MinMax(Board board, Timer timer, int depth, long maxTime, double alpha, double beta) {
         if (depth == MaxDepth || timer.MillisecondsElapsedThisTurn >= maxTime) {
             return (EvaluateBoard(board), Move.NullMove);
         }
@@ -50,28 +49,27 @@ public class MyBot : IChessBot {
             return (board.IsInCheckmate() ? double.NegativeInfinity : 0, Move.NullMove);
         }
 
-        double bestScore = double.NegativeInfinity;
         Move bestMove = Move.NullMove;
 
         Array.Sort(legalMoves, MoveOrder);
 
         foreach (Move move in legalMoves) {
             board.MakeMove(move);
-
-            (double score, Move _) = MinMax(board, timer, depth + 1, maxTime);
+            (double score, Move debug) = MinMax(board, timer, depth + 1, maxTime, -beta, -alpha);
             score = -score; // TODO Refactor This
+            board.UndoMove(move);
 
-            if (bestScore < score) {
-                bestScore = score;
-                bestMove = move;
+            if (score >= beta) {
+                return (beta, bestMove);
             }
 
-            board.UndoMove(move);
+            bestMove = alpha >= score ? bestMove : move;
+            alpha = alpha >= score ? alpha : score;
         }
 
-        _cache[board.ZobristKey] = (bestScore, bestMove);
+        _cache[board.ZobristKey] = (alpha, bestMove);
 
-        return (bestScore, bestMove);
+        return (alpha, bestMove);
     }
 
     private double EvaluateBoard(Board board) {
