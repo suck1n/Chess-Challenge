@@ -29,6 +29,17 @@ namespace ChessChallenge.Application
             {
                 controller.StartNewBotMatch(ChallengeController.PlayerType.MyBot, ChallengeController.PlayerType.EvilBot);
             }
+            if (NextButtonInRow("Custom Game", ref buttonPos, spacing, buttonSize))
+            {
+                Console.Write("Paste your FEN-String: ");
+                string? fen = Console.ReadLine();
+                Console.Write("Bot Color: ");
+                string? botColor = Console.ReadLine();
+
+                var whiteType = botColor.StartsWith("B") || botColor.StartsWith("b") ? ChallengeController.PlayerType.Human : ChallengeController.PlayerType.MyBot;
+                var blackType = botColor.StartsWith("B") || botColor.StartsWith("b") ? ChallengeController.PlayerType.MyBot : ChallengeController.PlayerType.Human;
+                controller.StartNewGame(whiteType, blackType, fen);
+            }
 
             // Page buttons
             buttonPos.Y += breakSpacing;

@@ -76,7 +76,7 @@ namespace ChessChallenge.Application
             StartNewGame(PlayerType.Human, PlayerType.MyBot);
         }
 
-        public void StartNewGame(PlayerType whiteType, PlayerType blackType)
+        public void StartNewGame(PlayerType whiteType, PlayerType blackType, string? fen = null)
         {
             // End any ongoing game
             EndGame(GameResult.DrawByArbiter, log: false, autoStartNextBotMatch: false);
@@ -95,7 +95,7 @@ namespace ChessChallenge.Application
             board = new Board();
             bool isGameWithHuman = whiteType is PlayerType.Human || blackType is PlayerType.Human;
             int fenIndex = isGameWithHuman ? 0 : botMatchGameIndex / 2;
-            board.LoadPosition(botMatchStartFens[fenIndex]);
+            board.LoadPosition(fen ?? botMatchStartFens[fenIndex]);
 
             // Player Setup
             PlayerWhite = CreatePlayer(whiteType);
