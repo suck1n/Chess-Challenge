@@ -118,8 +118,9 @@ public class MyBot : IChessBot {
     }
     
     public Move Think(Board board, Timer timer) {
-        return (board.IsWhiteToMove ? WhiteOpening(board, out Move move) : BlackOpening(board, out move)) ?
+        Move move = (board.IsWhiteToMove ? WhiteOpening(board, out move) : BlackOpening(board, out move)) ? 
             move : ActualWorkingChessEngineLoL(board, timer);
+        return move == Move.NullMove ? board.GetLegalMoves()[0] : move;
     }
 
 
@@ -154,6 +155,7 @@ public class MyBot : IChessBot {
 
     Move ActualWorkingChessEngineLoL(Board board, Timer timer) {
         var watch = System.Diagnostics.Stopwatch.StartNew();
+        var allottedTime = timer.MillisecondsRemaining / TimeUsage;
         (double lastScore, Move lastMove) = (0, Move.NullMove);
         for (int depth = StartDepth; ; depth++) {
             _cache.Clear();
@@ -162,10 +164,10 @@ public class MyBot : IChessBot {
             // TODO - look at time used => enough to calculate next depth?
             // TODO - rewrite MinMax, return boolean for time run out => to get currently best move that got evaluated
             (double score, Move move) = MinMax(board, timer, depth,
-                timer.MillisecondsRemaining / TimeUsage,
+                allottedTime,
                 double.NegativeInfinity, double.PositiveInfinity);
 
-            if (timer.MillisecondsElapsedThisTurn >= timer.MillisecondsRemaining / TimeUsage) {
+            if (timer.MillisecondsElapsedThisTurn >= allottedTime / 2) {
                 watch.Stop();
                 //Console.WriteLine("[" + (depth - 1) + "]\tTime " + watch.ElapsedMilliseconds + "ms\tWill get Score " + lastScore +
                 //                  " by playing move: " + lastMove);
