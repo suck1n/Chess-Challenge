@@ -4,6 +4,11 @@ using System.Linq;
 using System.Text;
 using ChessChallenge.API;
 
+/*
+ * TODO Fix init of positionValues
+ * TODO Reduce impact of positionValues
+ */
+
 public class MyBot : IChessBot {
 
     private const int StartDepth = 3;
@@ -13,6 +18,15 @@ public class MyBot : IChessBot {
 
     /*
      * PAWNS
+     * 00000 00000 00000 00000 00000 00000 00000 00000
+     * 01010 01010 01010 01010 01010 01010 01010 01010
+     * 00010 00010 00100 00110 00110 00100 00010 00010
+     * 00001 00001 00010 00101 00101 00010 00001 00001
+     * 00000 00000 00000 00100 00100 00000 00000 00000
+     * 00001 10001 10010 00000 00000 10010 10001 00001
+     * 00001 00010 00010 10100 10100 00010 00010 00001
+     * 00000 00000 00000 00000 00000 00000 00000 00000
+     * 
      * 0000000000000000000000000000000000000000010100101001010010100101
      * 0010100101001010000100001000100001100011000100000100001000001000
      * 0100010001010010100010000010000100000000000000000100001000000000
@@ -55,20 +69,26 @@ public class MyBot : IChessBot {
      * 0001100011000100100001000010000110000100000000000000100011000100
      */
 
-    private readonly long[]?[] _positionTable = {
+    private readonly ulong[]?[] _positionTable = {
         null,
-        new []{ 5412005, 2975208681795240456, 4923147017984688640, 3487652126984325, 5334585226876157952 },
-        new []{ -3013634536605679616, 187092916593235632, 5062622360138826252, 1634881644264867072, 1189681297231665946 },
-        new []{ -6582809881109069824, 5224888399041168, 4765094495945761032, 1337714366737453120, 55682726971988 },
-        new []{ 558113, 594906159370998152, 75296145408, 1263259695478573056, 18691698753536 },
-        new []{ -6582828023050928128, 5224888122217096, 148763996252672132, 1265584133993828354, 20498353801812 },
-        new []{ -18595508123125298, 8330751894883096758, 3579626227749456986, -3128548966949314269, 1784696631828940996 }
+        new ulong[]{ 5412005, 2975208681795240456, 4923147017984688640, 3487652126984325, 5334585226876157952 },
+        new ulong[]{ 15433109537103872000, 187092916593235632, 5062622360138826252, 1634881644264867072, 1189681297231665946 },
+        new ulong[]{ 11863934192600481792, 5224888399041168, 4765094495945761032, 1337714366737453120, 55682726971988 },
+        new ulong[]{ 558113, 594906159370998152, 75296145408, 1263259695478573056, 18691698753536 },
+        new ulong[]{ 11863916050658623488, 5224888122217096, 148763996252672132, 1265584133993828354, 20498353801812 },
+        new ulong[]{ 18428148565586426318, 8330751894883096758, 3579626227749456986, 15318195106760237347, 1784696631828940996 }
     };
+
+    //                    (pieceType, rank, file) -> value
+    private readonly Dictionary<(int, int, int), int> _positionValues = new();
 
     // TODO Rewrite Caching (fun) abc-bca kompilieren, donn geat des. hon i gheart.. hot mo a bekonnto.. a vögelein getschwitzert ~ Maxi
 
+    public MyBot() {
+        InitPositionValues();
+    }
+    
     public Move Think(Board board, Timer timer) {
-        GetPositionValue((int)PieceType.Pawn, 1, 0, true);
         return (board.IsWhiteToMove ? WhiteOpening(board, out Move move) : BlackOpening(board, out move)) ?
             move : ActualWorkingChessEngineLoL(board, timer);
     }
@@ -170,7 +190,7 @@ public class MyBot : IChessBot {
         double eval = 0;
 
         foreach (PieceList list in board.GetAllPieceLists()) {
-            eval += (list.IsWhitePieceList ? 1 : -1) * (_pieceValues[(int) list.TypeOfPieceInList] * list.Count);
+            eval += 10 * (list.IsWhitePieceList ? 1 : -1) * _pieceValues[(int) list.TypeOfPieceInList] * list.Count;
 
             foreach (Piece piece in list) {
                 eval += GetPositionValue((int)piece.PieceType, piece.Square.Rank, piece.Square.File, piece.IsWhite);
@@ -201,19 +221,56 @@ public class MyBot : IChessBot {
     }
 
     private int GetPositionValue(int pieceType, int rank, int file, bool isWhite) {
-        Console.WriteLine("Value Of Piece on square: " + ChessChallenge.Chess.BoardHelper.SquareNameFromIndex(rank * 8 + file));
-        long[]? values = _positionTable[pieceType];
+        //Console.WriteLine("Value Of Piece on square: " + ChessChallenge.Chess.BoardHelper.SquareNameFromIndex(rank * 8 + file));
+        //long[]? values = _positionTable[pieceType];
         rank = isWhite ? 7 - rank : rank; // Number
         file = isWhite ? 7 - file : file; // Character
 
-        int index = (rank / 2);
+        return _positionValues[(pieceType, rank, file)];
 
-        PrintTable(pieceType);
-        Console.WriteLine(index);
+        //int index = (rank / 2);
 
-        Console.WriteLine(values[index] + " - " + Convert.ToString(values[index], 2));
+        //PrintTable(pieceType);
+        //Console.WriteLine(index);
 
-        return (int) values[0];
+        //Console.WriteLine(values[index] + " - " + Convert.ToString(values[index], 2));
+
+        //return (int) values[0];
+    }
+
+    private void InitPositionValues() {
+        for (int piece = 1; piece < _positionTable.Length; piece++) {
+            int counter = 0;
+            int rank = 0;
+            int file = 0;
+            ulong value = 0;
+            
+            foreach (ulong l in _positionTable[piece]) {
+                ulong rest = l;
+
+                for (int i = 0; i < 64; i++) {
+                    ulong bit = (rest & 0x8000000000000000) >> 63;
+                    rest <<= 1;
+                    value = (value << 1) | bit;
+
+                    //Console.Write(Convert.ToString((long)bit, 2));
+
+                    if (++counter % 5 == 0) {
+                        int intValue = (value & 0x10) == 0x10 ? -1 * (int) (value & 0xf) : (int) value;
+                        //Console.Write(intValue + " ");
+                        _positionValues.Add((piece, rank, file), intValue);
+                        rank++;
+                        value = 0;
+                    }
+
+                    if (counter % 40 == 0) {
+                        //Console.WriteLine();
+                        file++;
+                        rank = 0;
+                    }
+                }
+            }
+        }
     }
 
     private void PrintTable(int index) {// #DEBUG
