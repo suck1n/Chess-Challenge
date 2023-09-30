@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using ChessChallenge.API;
 
 /*
@@ -11,10 +9,10 @@ using ChessChallenge.API;
 
 public class MyBot : IChessBot {
 
-    private const int StartDepth = 3;
-    private const int TimeUsage = 10;
-    private readonly int[] _pieceValues = { 0, 1, 3, 3, 5, 9, 999 };
-    private readonly Dictionary<ulong, (double, Move)> _cache = new();
+    int StartDepth = 3;
+    int TimeUsage = 10;
+    int[] _pieceValues = { 0, 10, 30, 30, 50, 90, 9999 };
+    Dictionary<ulong, (double, Move)> _cache = new();
 
     /*
      * PAWNS
@@ -69,7 +67,7 @@ public class MyBot : IChessBot {
      * 0001100011000100100001000010000110000100000000000000100011000100
      */
 
-    private readonly ulong[]?[] _positionTable = {
+    ulong[]?[] _positionTable = {
         null,
         new ulong[]{ 5412005, 2975208681795240456, 4923147017984688640, 3487652126984325, 5334585226876157952 },
         new ulong[]{ 15433109537103872000, 187092916593235632, 5062622360138826252, 1634881644264867072, 1189681297231665946 },
@@ -80,12 +78,43 @@ public class MyBot : IChessBot {
     };
 
     //                    (pieceType, rank, file) -> value
-    private readonly Dictionary<(int, int, int), int> _positionValues = new();
+    Dictionary<(int, int, int), int> _positionValues = new();
 
     // TODO Rewrite Caching (fun) abc-bca kompilieren, donn geat des. hon i gheart.. hot mo a bekonnto.. a vögelein getschwitzert ~ Maxi
 
     public MyBot() {
-        InitPositionValues();
+        for (int piece = 1; piece < _positionTable.Length; piece++) {
+            int counter = 0;
+            int rank = 0;
+            int file = 0;
+            ulong value = 0;
+            
+            foreach (ulong l in _positionTable[piece]) {
+                ulong rest = l;
+
+                for (int i = 0; i < 64; i++) {
+                    ulong bit = (rest & 0x8000000000000000) >> 63;
+                    rest <<= 1;
+                    value = (value << 1) | bit;
+
+                    //Console.Write(Convert.ToString((long)bit, 2));
+
+                    if (++counter % 5 == 0) {
+                        int intValue = (value & 0x10) == 0x10 ? -1 * (int) (value & 0xf) : (int) value;
+                        //Console.Write(intValue + " ");
+                        _positionValues.Add((piece, rank, file), intValue);
+                        rank++;
+                        value = 0;
+                    }
+
+                    if (counter % 40 == 0) {
+                        //Console.WriteLine();
+                        file++;
+                        rank = 0;
+                    }
+                }
+            }
+        }
     }
     
     public Move Think(Board board, Timer timer) {
@@ -95,7 +124,7 @@ public class MyBot : IChessBot {
 
 
     // Fried Liver
-    private bool WhiteOpening(Board board, out Move move) {
+    bool WhiteOpening(Board board, out Move move) {
         Dictionary<ulong, String> moves = new() {
             { 13227872743731781434, "e2e4" },
             { 17664629573069429839, "g1f3" },
@@ -111,7 +140,7 @@ public class MyBot : IChessBot {
     }
 
     // King Indians Defense
-    private bool BlackOpening(Board board, out Move move) {
+    bool BlackOpening(Board board, out Move move) {
         Dictionary<ulong, String> moves = new() {
             { 15607329186585411972, "g8f6" },
             { 13920910881790336478, "g8f6" },
@@ -123,7 +152,7 @@ public class MyBot : IChessBot {
         return move != Move.NullMove;
     }
 
-    private Move ActualWorkingChessEngineLoL(Board board, Timer timer) {
+    Move ActualWorkingChessEngineLoL(Board board, Timer timer) {
         var watch = System.Diagnostics.Stopwatch.StartNew();
         (double lastScore, Move lastMove) = (0, Move.NullMove);
         for (int depth = StartDepth; ; depth++) {
@@ -138,8 +167,8 @@ public class MyBot : IChessBot {
 
             if (timer.MillisecondsElapsedThisTurn >= timer.MillisecondsRemaining / TimeUsage) {
                 watch.Stop();
-                Console.WriteLine("[" + (depth - 1) + "]\tTime " + watch.ElapsedMilliseconds + "ms\tWill get Score " + lastScore +
-                                  " by playing move: " + lastMove);
+                //Console.WriteLine("[" + (depth - 1) + "]\tTime " + watch.ElapsedMilliseconds + "ms\tWill get Score " + lastScore +
+                //                  " by playing move: " + lastMove);
 
                 return lastMove;
             }
@@ -149,7 +178,7 @@ public class MyBot : IChessBot {
         }
     }
 
-    private (double, Move) MinMax(Board board, Timer timer, int depth, long maxTime, double alpha, double beta) {
+    (double, Move) MinMax(Board board, Timer timer, int depth, long maxTime, double alpha, double beta) {
         if (_cache.TryGetValue(board.ZobristKey, out (double, Move) result)) {
             return result;
         }
@@ -186,14 +215,16 @@ public class MyBot : IChessBot {
         return (alpha, bestMove);
     }
 
-    private double EvaluateBoard(Board board) {
+    double EvaluateBoard(Board board) {
         double eval = 0;
 
         foreach (PieceList list in board.GetAllPieceLists()) {
-            eval += 10 * (list.IsWhitePieceList ? 1 : -1) * _pieceValues[(int) list.TypeOfPieceInList] * list.Count;
+            eval += (list.IsWhitePieceList ? 1 : -1) * _pieceValues[(int) list.TypeOfPieceInList] * list.Count;
 
             foreach (Piece piece in list) {
-                eval += GetPositionValue((int)piece.PieceType, piece.Square.Rank, piece.Square.File, piece.IsWhite);
+                var rank = piece.Square.Rank;
+                var file = piece.Square.File;
+                eval += _positionValues[((int)piece.PieceType, piece.IsWhite ? 7 - rank : rank, piece.IsWhite ? 7 - file : file)];
             }
         }
 
@@ -202,115 +233,24 @@ public class MyBot : IChessBot {
         return (board.IsWhiteToMove ? 1 : -1) * eval;
     }
 
-    private int MoveOrder(Move a, Move b, Board board) {
-        int weight = 0;
+    int MoveOrder(Move a, Move b, Board board) {
+        return -(_pieceValues[(int)a.CapturePieceType] - _pieceValues[(int)b.CapturePieceType]
+                 + _pieceValues[(int)a.PromotionPieceType] - _pieceValues[(int)b.PromotionPieceType]
+                 - ((board.SquareIsAttackedByOpponent(a.TargetSquare) ? _pieceValues[(int)a.MovePieceType] : 0 )
+                    - (board.SquareIsAttackedByOpponent(b.TargetSquare) ? _pieceValues[(int)b.MovePieceType] : 0 )));
 
         // + Taking moves
-        weight += _pieceValues[(int)a.CapturePieceType] - _pieceValues[(int)b.CapturePieceType];
+        //weight += _pieceValues[(int)a.CapturePieceType] - _pieceValues[(int)b.CapturePieceType];
 
         // + Promote pawn
-        weight += _pieceValues[(int)a.PromotionPieceType] - _pieceValues[(int)b.PromotionPieceType];
+        //weight += _pieceValues[(int)a.PromotionPieceType] - _pieceValues[(int)b.PromotionPieceType];
 
         // - Gifting piece
-        weight -= (board.SquareIsAttackedByOpponent(a.TargetSquare) ? _pieceValues[(int)a.MovePieceType] : 0 )
-                  - (board.SquareIsAttackedByOpponent(b.TargetSquare) ? _pieceValues[(int)b.MovePieceType] : 0 );
+        //weight -= (board.SquareIsAttackedByOpponent(a.TargetSquare) ? _pieceValues[(int)a.MovePieceType] : 0 )
+        //          - (board.SquareIsAttackedByOpponent(b.TargetSquare) ? _pieceValues[(int)b.MovePieceType] : 0 );
 
         // TODO + Check move
         // TODO Positional awareness
-        return -weight; // Invert because of ascending order
+        //return -weight; // Invert because of ascending order
     }
-
-    private int GetPositionValue(int pieceType, int rank, int file, bool isWhite) {
-        //Console.WriteLine("Value Of Piece on square: " + ChessChallenge.Chess.BoardHelper.SquareNameFromIndex(rank * 8 + file));
-        //long[]? values = _positionTable[pieceType];
-        rank = isWhite ? 7 - rank : rank; // Number
-        file = isWhite ? 7 - file : file; // Character
-
-        return _positionValues[(pieceType, rank, file)];
-
-        //int index = (rank / 2);
-
-        //PrintTable(pieceType);
-        //Console.WriteLine(index);
-
-        //Console.WriteLine(values[index] + " - " + Convert.ToString(values[index], 2));
-
-        //return (int) values[0];
-    }
-
-    private void InitPositionValues() {
-        for (int piece = 1; piece < _positionTable.Length; piece++) {
-            int counter = 0;
-            int rank = 0;
-            int file = 0;
-            ulong value = 0;
-            
-            foreach (ulong l in _positionTable[piece]) {
-                ulong rest = l;
-
-                for (int i = 0; i < 64; i++) {
-                    ulong bit = (rest & 0x8000000000000000) >> 63;
-                    rest <<= 1;
-                    value = (value << 1) | bit;
-
-                    //Console.Write(Convert.ToString((long)bit, 2));
-
-                    if (++counter % 5 == 0) {
-                        int intValue = (value & 0x10) == 0x10 ? -1 * (int) (value & 0xf) : (int) value;
-                        //Console.Write(intValue + " ");
-                        _positionValues.Add((piece, rank, file), intValue);
-                        rank++;
-                        value = 0;
-                    }
-
-                    if (counter % 40 == 0) {
-                        //Console.WriteLine();
-                        file++;
-                        rank = 0;
-                    }
-                }
-            }
-        }
-    }
-
-    private void PrintTable(int index) {// #DEBUG
-        int counter = 0;// #DEBUG
-
-        foreach (ulong l in _positionTable[index]) {// #DEBUG
-            ulong actualValue = l;// #DEBUG
-
-            for (int i = 0; i < 64; i++) {// #DEBUG
-                ulong bit = (actualValue & 0x8000000000000000) >> 63;// #DEBUG
-                actualValue <<= 1;// #DEBUG
-
-                Console.Write(Convert.ToString((long)bit, 2));// #DEBUG
-
-                if (++counter % 5 == 0) {// #DEBUG
-                    Console.Write(" ");// #DEBUG
-                }// #DEBUG
-                if (counter % 40 == 0) {// #DEBUG
-                    Console.WriteLine();// #DEBUG
-                }// #DEBUG
-            }// #DEBUG
-        }// #DEBUG
-    }// #DEBUG
-
-    private void ConvertTable(int[] table) { // #DEBUG
-        StringBuilder builder = new();// #DEBUG
-
-        foreach (int value in table) {// #DEBUG
-            builder.Append(Convert.ToString((value < 0 ? 16 : 0) + (Math.Abs(value) / 5), 2).PadLeft(5, '0'));// #DEBUG
-        }// #DEBUG
-
-        builder.Insert(256, "\n     * ");// #DEBUG
-        builder.Insert(192, "\n     * ");// #DEBUG
-        builder.Insert(128, "\n     * ");// #DEBUG
-        builder.Insert(64,  "\n     * ");// #DEBUG
-
-        String[] numStrings = builder.ToString().Split("\n     * ");// #DEBUG
-        builder.Insert(0,   "     * ");// #DEBUG
-
-        Console.WriteLine(builder.ToString());// #DEBUG
-        numStrings.ToList().ForEach(s => Console.Write(Convert.ToInt64(s, 2) + ", "));// #DEBUG
-    } // #DEBUG
 }
